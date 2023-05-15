@@ -1,0 +1,32 @@
+{
+  "editor.tabSize": 4,
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.venv": true
+  },
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}/bot/.venv/lib/python3.11/site-packages",
+    "${workspaceFolder}/bot/src",
+  ],
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/bot/.venv/lib/python3.11/site-packages",
+    "${workspaceFolder}/bot/src"
+  ],
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.completeFunctionParens": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.indexing": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.include": [
+    "${workspaceFolder}/bot/.venv/lib/python3.11/site-packages",
+    "${workspaceFolder}/bot/src"
+  ],
+  "cSpell.ignoreRegExpList": [
+    "[а-яА-Я]+"
+  ],
+  "cSpell.words": [
+    "aiogram",
+    "davinci",
+    "openai"
+  ]
+}

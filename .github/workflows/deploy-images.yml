@@ -1,0 +1,47 @@
+name: Deploy Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-version:
+        description: Exact image version
+        required: false
+
+env:
+  PRODUCT_NAME: docker-openvpn
+  SSH_KEY_NAME: id_rsa
+
+jobs:
+  deploy-bot:
+    if: inputs.image-version || github.ref_type == 'tag'
+    runs-on: [self-hosted, docker]
+    steps:
+    - name: Get Docker image tag for ghcr.io
+      id: docker-image-tag
+      uses: Danand/docker-image-tag@v2-rc.8
+      with:
+        product-name: ${{ env.PRODUCT_NAME }}
+        input-version: ${{ inputs.image-version || github.ref_name }}
+    - name: Deploy image of service
+      shell: bash
+      run: |
+        rm -f ${{ env.SSH_KEY_NAME }}
+        echo "${{ secrets.DEPLOY_SSH_KEY }}" > ${{ env.SSH_KEY_NAME }}
+        chmod 600 ${{ env.SSH_KEY_NAME }}
+        ssh \
+          -o StrictHostKeyChecking=no \
+          -i ${{ env.SSH_KEY_NAME }} \
+          root@${{ secrets.HOST_PUBLIC_IP }} \
+          "\
+            docker login \
+              --username ${{ github.repository_owner }} \
+              --password ${{ secrets._GITHUB_PAT }} \
+              ghcr.io && \
+            (docker stop "${{ env.PRODUCT_NAME }}" &>/dev/null || true) && \
+            docker run \
+              -d \
+              --rm \
+              --name="${{ env.PRODUCT_NAME }}" \
+              ${{ steps.docker-image-tag.outputs.image-tag }} \
+          "
+        rm ${{ env.SSH_KEY_NAME }}
