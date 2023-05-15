@@ -8,7 +8,7 @@ on:
         required: false
 
 env:
-  PRODUCT_NAME: docker-openvpn
+  PRODUCT_NAME: bot-openai
   SSH_KEY_NAME: id_rsa
 
 jobs:
