@@ -138,13 +138,20 @@ async def set_model_handler(message: Message, state: FSMContext) -> None:
             inline_keyboard=[[InlineKeyboardButton(text=model.id, callback_data=model.id)] for model in models_chat_completion]))
 
 @router.callback_query(States.model)
-async def callback_query_model_handler(callbackQuery: CallbackQuery, state: FSMContext) -> None:
-    model = callbackQuery.data
+async def callback_query_model_handler(callback_query: CallbackQuery, state: FSMContext) -> None:
+    model = callback_query.data
 
     await state.update_data(model=model)
     await state.set_state(States.default)
 
-    await callbackQuery.answer(f"Chosen model: {model}")
+    await callback_query.answer(f"Chosen model: {model}")
+
+    message = callback_query.message
+
+    if message is not None:
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text=f"Model changed to {model}")
 
 @router.message(Command("set_temperature"))
 async def set_temperature_handler(message: Message, state: FSMContext) -> None:
@@ -174,13 +181,20 @@ async def set_temperature_handler(message: Message, state: FSMContext) -> None:
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 @router.callback_query(States.temperature)
-async def callback_query_temperature_handler(callbackQuery: CallbackQuery, state: FSMContext) -> None:
-    temperature = callbackQuery.data
+async def callback_query_temperature_handler(callback_query: CallbackQuery, state: FSMContext) -> None:
+    temperature = callback_query.data
 
     await state.update_data(temperature=temperature)
     await state.set_state(States.default)
 
-    await callbackQuery.answer(f"Chosen temperature: {temperature}")
+    await callback_query.answer(f"Chosen temperature: {temperature}")
+
+    message = callback_query.message
+
+    if message is not None:
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text=f"Temperature changed to {temperature}")
 
 async def get_answer(prompt: str, state: FSMContext) -> str:
     openai.api_key = OPENAI_API_KEY
