@@ -22,6 +22,8 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
+    ForceReply,
+    ReplyKeyboardRemove
 )
 
 from redis.asyncio.client import Redis
@@ -29,10 +31,11 @@ from redis.asyncio.client import Redis
 TELEGRAM_API_TOKEN: str = env.get("TELEGRAM_API_TOKEN") # type: ignore
 TELEGRAM_WHITELISTED_USERS: str = env.get("TELEGRAM_WHITELISTED_USERS") # type: ignore
 OPENAI_API_KEY: str = env.get("OPENAI_API_KEY") # type: ignore
+OPENAI_DEFAULT_MODEL: str = env.get("OPENAI_DEFAULT_MODEL", "gpt-3.5-turbo") # type: ignore
+OPENAI_DEFAULT_TEMPERATURE: str = env.get("OPENAI_DEFAULT_TEMPERATURE", "1.0") # type: ignore
+OPENAI_DEFAULT_MAX_TOKENS: str = env.get("OPENAI_DEFAULT_MAX_TOKENS", "0") # type: ignore
 REDIS_HOST: str = env.get("REDIS_HOST", "localhost") # type: ignore
 REDIS_PORT: int = int(env.get("REDIS_PORT", "6379")) # type: ignore
-DEFAULT_MODEL: str = env.get("DEFAULT_MODEL", "gpt-3.5-turbo") # type: ignore
-DEFAULT_TEMPERATURE: str = env.get("DEFAULT_TEMPERATURE", "1.0") # type: ignore
 
 bot = Bot(token=TELEGRAM_API_TOKEN, parse_mode="Markdown")
 
@@ -75,6 +78,10 @@ class IsNotCommand(Filter):
 
         return not message.text.startswith("/")
 
+class IsNotReply(Filter):
+    async def __call__(self, message: Message) -> bool:
+        return message.reply_to_message is None
+
 def parse_user_ids(comma_separated: str) -> List[int]:
     return [int(value) for value in comma_separated.split(",")]
 
@@ -88,6 +95,7 @@ async def access_error_handler(error_event: ErrorEvent) -> None:
 
 @router.message(
     IsNotCommand(),
+    IsNotReply(),
     WhitelistedUsers(
         parse_user_ids(TELEGRAM_WHITELISTED_USERS)))
 async def prompt_handler(message: Message, state: FSMContext) -> None:
@@ -110,11 +118,11 @@ async def start_handler(message: Message, state: FSMContext) -> None:
     await message.reply("Hi! Write your prompt or check out available commands.")
 
     await bot.set_my_commands(commands=[
-        BotCommand(command="get_my_telegram_id", description="Get my Telegram ID"),
-        BotCommand(command="set_model", description="Choose ChatGPT model"),
-        BotCommand(command="set_temperature", description="Set temperature (creativity)"),
-        BotCommand(command="max_tokens", description="Set tokens limit"),
         BotCommand(command="reset_conversation", description="Reset conversation"),
+        BotCommand(command="set_temperature", description="Set temperature (creativity)"),
+        BotCommand(command="set_model", description="Choose ChatGPT model"),
+        BotCommand(command="set_max_tokens", description="Set token limit"),
+        BotCommand(command="get_my_telegram_id", description="Get my Telegram ID"),
     ], scope=BotCommandScopeAllPrivateChats(type="all_private_chats"))
 
 @router.message(Command("get_my_telegram_id"))
@@ -196,18 +204,58 @@ async def callback_query_temperature_handler(callback_query: CallbackQuery, stat
             chat_id=message.chat.id,
             text=f"Temperature changed to {temperature}")
 
+@router.message(Command("set_max_tokens"))
+async def set_max_tokens_handler(message: Message, state: FSMContext) -> None:
+    await state.set_state(States.max_tokens)
+
+    await message.reply(
+        text="Enter a number of token limit per response. 0 is for unlimited.",
+        reply_markup=ForceReply(
+            force_reply=True,
+            input_field_placeholder=OPENAI_DEFAULT_MAX_TOKENS))
+
+@router.message(States.max_tokens)
+async def reply_max_tokens_handler(message: Message, state: FSMContext) -> None:
+    max_tokens = message.text
+
+    if max_tokens is None or not max_tokens.isdigit():
+        await message.reply(
+            text="Enter a correct number of token limit per response. 0 is for unlimited.",
+            reply_markup=ForceReply(
+                force_reply=True,
+                input_field_placeholder=OPENAI_DEFAULT_MAX_TOKENS))
+
+        return
+
+    await state.update_data(max_tokens=max_tokens)
+    await state.set_state(States.default)
+
+    await message.reply(
+        text=f"Token limit changed to {max_tokens}.",
+        reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
+
 async def get_answer(prompt: str, state: FSMContext) -> str:
     openai.api_key = OPENAI_API_KEY
 
     data = await state.get_data()
 
-    model = data.get("model", DEFAULT_MODEL)
-    temperature = data.get("temperature", DEFAULT_TEMPERATURE)
+    model = data.get("model", OPENAI_DEFAULT_MODEL)
+    temperature = float(data.get("temperature", OPENAI_DEFAULT_TEMPERATURE))
+    max_tokens = int(data.get("max_tokens", OPENAI_DEFAULT_MAX_TOKENS))
 
-    response = await openai.ChatCompletion.acreate(
-        model=model,
-        temperature=float(temperature),
-        messages=[{"role": "user", "content": prompt}])
+    messages = [{"role": "user", "content": prompt}]
+
+    if max_tokens == 0:
+        response = await openai.ChatCompletion.acreate(
+            model=model,
+            temperature=temperature,
+            messages=messages)
+    else:
+        response = await openai.ChatCompletion.acreate(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            messages=messages)
 
     return response.choices[0].message.content # type: ignore
 
