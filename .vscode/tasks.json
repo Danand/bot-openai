@@ -1,0 +1,12 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "launch-redis",
+            "type": "shell",
+            "command": "${workspaceFolder}/redis-run.sh",
+            "presentation": { "reveal": "never" },
+            "group": "build",
+        }
+    ]
+}
