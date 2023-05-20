@@ -1,4 +1,4 @@
 aiogram==3.0.0b7
 openai==0.27.6
 redis==4.5.5
-
+asyncio==3.4.3

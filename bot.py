@@ -2,6 +2,7 @@ from os import environ as env
 from typing import List
 
 import openai
+import asyncio
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import Filter
@@ -99,17 +100,39 @@ async def access_error_handler(error_event: ErrorEvent) -> None:
     WhitelistedUsers(
         parse_user_ids(TELEGRAM_WHITELISTED_USERS)))
 async def prompt_handler(message: Message, state: FSMContext) -> None:
-    if (message.text is not None and len(message.text) > 0):
-        await bot.send_chat_action(
-            chat_id=message.chat.id,
-            action=ChatAction.TYPING)
+    send_typing_task = asyncio.create_task(send_typing(message))
+    send_answer_task = asyncio.create_task(send_answer(message, state))
 
-        try:
-            answer = await get_answer(message.text, state)
-            await bot.send_message(message.chat.id, answer)
-        except Exception as exception:
-            text = f"Exception occurred:\n```log\n{exception}\n```"
-            await bot.send_message(message.chat.id, text)
+    concurrent_tasks = [send_typing_task, send_answer_task]
+
+    done_tasks, _ = await asyncio.wait(concurrent_tasks, return_when=asyncio.FIRST_COMPLETED)
+
+    undone_tasks = [concurrent_task for concurrent_task in concurrent_tasks if concurrent_task not in done_tasks]
+
+    for undone_task in undone_tasks:
+        undone_task.cancel()
+
+async def send_answer(message: Message, state: FSMContext) -> None:
+    if (message.text is None or len(message.text) == 0):
+        return
+
+    try:
+        answer = await get_answer(message.text, state)
+        await bot.send_message(message.chat.id, answer)
+    except Exception as exception:
+        text = f"Exception occurred:\n```log\n{exception}\n```"
+        await bot.send_message(message.chat.id, text)
+
+async def send_typing(message: Message) -> None:
+    try:
+        while True:
+            await bot.send_chat_action(
+                chat_id=message.chat.id,
+                action=ChatAction.TYPING)
+
+            await asyncio.sleep(5)
+    except asyncio.CancelledError:
+        pass
 
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext) -> None:
