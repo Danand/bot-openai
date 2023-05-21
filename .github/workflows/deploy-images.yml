@@ -4,12 +4,51 @@ on:
   workflow_dispatch:
     inputs:
       image-version:
+        type: string
         description: Exact image version
+        required: false
+      log-level:
+        type: choice
+        options:
+          - NOTSET
+          - DEBUG
+          - INFO
+          - WARNING
+          - ERROR
+          - CRITICAL
+        default: INFO
+        description: Logging level.
+        required: false
+      openai-default-model:
+        type: choice
+        options:
+          - gpt-3.5-turbo
+          - gpt-3.5-turbo-0301
+          - gpt-4
+          - gpt-4-0314
+          - gpt-4-32k
+          - gpt-4-32k-0314
+        default: gpt-3.5-turbo
+        description: Default chat completion model on new user session.
+        required: false
+      openai-default-temperature:
+        type: number
+        default: 1.0
+        description: Default creativity (from 0.0 to 2.0) on new user session.
+        required: false
+      openai-default-max-tokens:
+        type: number
+        default: 0
+        description: Default limit of tokens on new user session.
         required: false
 
 env:
   PRODUCT_NAME: bot-openai
   SSH_KEY_NAME: id_rsa
+  REDIS_HOST: bot-openai-redis
+  REDIS_PORT: 6380
+  REDIS_VERSION: 7.0.11-alpine3.18
+  DEPLOY_PATH: /root/bot-openai
 
 jobs:
   deploy-bot:
@@ -33,18 +72,48 @@ jobs:
           -i ${{ env.SSH_KEY_NAME }} \
           root@${{ secrets.HOST_PUBLIC_IP }} \
           "\
+            cd ${{ env.DEPLOY_PATH }} && \
+            (docker-compose stop &>/dev/null || true) && \
+            (docker-compose rm &>/dev/null || true) && \
+            rm -rf ${{ env.DEPLOY_PATH }} ; \
+            mkdir -p ${{ env.DEPLOY_PATH }} \
+          "
+        scp \
+          -o StrictHostKeyChecking=no \
+          -i ${{ env.SSH_KEY_NAME }} \
+          docker-compose.yml \
+          root@${{ secrets.HOST_PUBLIC_IP }}:${{ env.DEPLOY_PATH }}/docker-compose.yml
+        scp \
+          -o StrictHostKeyChecking=no \
+          -i ${{ env.SSH_KEY_NAME }} \
+          docker-compose-deploy.yml \
+          root@${{ secrets.HOST_PUBLIC_IP }}:${{ env.DEPLOY_PATH }}/docker-compose-deploy.yml
+        ssh \
+          -o StrictHostKeyChecking=no \
+          -i ${{ env.SSH_KEY_NAME }} \
+          root@${{ secrets.HOST_PUBLIC_IP }} \
+          "\
             docker login \
               --username ${{ github.repository_owner }} \
               --password ${{ secrets._GITHUB_PAT }} \
               ghcr.io && \
-            (docker stop "${{ env.PRODUCT_NAME }}" &>/dev/null || true) && \
-            docker run \
-              -d \
-              --rm \
-              --name="${{ env.PRODUCT_NAME }}" \
-              --env="TELEGRAM_API_TOKEN=${{ secrets.TELEGRAM_API_TOKEN }}" \
-              --env="TELEGRAM_WHITELISTED_USERS=${{ secrets.TELEGRAM_WHITELISTED_USERS }}" \
-              --env="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
-              ${{ steps.docker-image-tag.outputs.image-tag }} \
+            cd ${{ env.DEPLOY_PATH }} && \
+            docker-compose \
+              --file="./docker-compose.yml"
+              --file="./docker-compose-deploy.yml"
+              up \
+              --detach \
+              --build \
+              -e "LOG_LEVEL=${{ inputs.log-level }}" \
+              -e "TELEGRAM_API_TOKEN=${{ secrets.TELEGRAM_API_TOKEN }}" \
+              -e "TELEGRAM_WHITELISTED_USERS=${{ secrets.TELEGRAM_WHITELISTED_USERS }}" \
+              -e "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
+              -e "OPENAI_DEFAULT_MODEL=${{ inputs.openai-default-model }}" \
+              -e "OPENAI_DEFAULT_TEMPERATURE=${{ inputs.openai-default-temperature }}" \
+              -e "OPENAI_DEFAULT_MAX_TOKENS=${{ inputs.openai-default-max-tokens }}" \
+              -e "REDIS_HOST=${{ env.REDIS_HOST }}" \
+              -e "REDIS_PORT=${{ env.REDIS_PORT }}" \
+              -e "REDIS_VERSION=${{ env.REDIS_VERSION }}" \
+              -e "BOT_IMAGE_NAME=${{ steps.docker-image-tag.outputs.image-tag }}"" \
           "
         rm ${{ env.SSH_KEY_NAME }}
