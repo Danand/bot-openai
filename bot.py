@@ -1,8 +1,11 @@
 from os import environ as env
-from typing import List
+from typing import List, Dict
 
+import sys
 import openai
 import asyncio
+
+import logging as log
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import Filter
@@ -29,13 +32,19 @@ from aiogram.types import (
 
 from redis.asyncio.client import Redis
 
+log.basicConfig(
+    stream=sys.stdout,
+    level=log.DEBUG)
+
+is_in_docker = bool(env.get("IS_IN_DOCKER", "False"))
+
 TELEGRAM_API_TOKEN: str = env.get("TELEGRAM_API_TOKEN") # type: ignore
 TELEGRAM_WHITELISTED_USERS: str = env.get("TELEGRAM_WHITELISTED_USERS") # type: ignore
 OPENAI_API_KEY: str = env.get("OPENAI_API_KEY") # type: ignore
 OPENAI_DEFAULT_MODEL: str = env.get("OPENAI_DEFAULT_MODEL", "gpt-3.5-turbo") # type: ignore
 OPENAI_DEFAULT_TEMPERATURE: str = env.get("OPENAI_DEFAULT_TEMPERATURE", "1.0") # type: ignore
 OPENAI_DEFAULT_MAX_TOKENS: str = env.get("OPENAI_DEFAULT_MAX_TOKENS", "0") # type: ignore
-REDIS_HOST: str = env.get("REDIS_HOST", "localhost") # type: ignore
+REDIS_HOST: str = env.get("REDIS_HOST", "localhost") if is_in_docker else "localhost" # type: ignore
 REDIS_PORT: int = int(env.get("REDIS_PORT", "6379")) # type: ignore
 
 bot = Bot(token=TELEGRAM_API_TOKEN, parse_mode="Markdown")
@@ -57,7 +66,7 @@ class States(StatesGroup):
     model = State()
     temperature = State()
     max_tokens = State()
-    remember_messages = State()
+    saved_messages = State()
 
 class WhitelistedUsers(Filter):
     def __init__(self, ids: List[int]) -> None:
@@ -101,7 +110,7 @@ async def access_error_handler(error_event: ErrorEvent) -> None:
         parse_user_ids(TELEGRAM_WHITELISTED_USERS)))
 async def prompt_handler(message: Message, state: FSMContext) -> None:
     send_typing_task = asyncio.create_task(send_typing(message))
-    send_answer_task = asyncio.create_task(send_answer(message, state))
+    send_answer_task = asyncio.create_task(send_prompt(message, state))
 
     concurrent_tasks = [send_typing_task, send_answer_task]
 
@@ -112,14 +121,28 @@ async def prompt_handler(message: Message, state: FSMContext) -> None:
     for undone_task in undone_tasks:
         undone_task.cancel()
 
-async def send_answer(message: Message, state: FSMContext) -> None:
-    if (message.text is None or len(message.text) == 0):
+async def send_prompt(message: Message, state: FSMContext) -> None:
+    prompt = message.text
+
+    if (prompt is None or len(prompt) == 0):
         return
 
+    data = await state.get_data()
+    saved_messages: List[Dict[str, str]] = data.get("saved_messages", [])
+
+    saved_messages.append({"role": "user", "content": prompt})
+    await state.update_data(saved_messages=saved_messages)
+
     try:
-        answer = await get_answer(message.text, state)
+        answer = await get_answer(prompt, state)
+
         await bot.send_message(message.chat.id, answer)
+
+        saved_messages.append({"role": "assistant", "content": answer})
+        await state.update_data(saved_messages=saved_messages)
+
     except Exception as exception:
+        log.error(exception)
         text = f"Exception occurred:\n```log\n{exception}\n```"
         await bot.send_message(message.chat.id, text)
 
@@ -257,6 +280,11 @@ async def reply_max_tokens_handler(message: Message, state: FSMContext) -> None:
         text=f"Token limit changed to {max_tokens}.",
         reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
 
+@router.message(Command("reset_conversation"))
+async def reset_conversation_handler(message: Message, state: FSMContext) -> None:
+    await state.update_data(saved_messages=[])
+    await message.reply(f"Conversation forgotten.")
+
 async def get_answer(prompt: str, state: FSMContext) -> str:
     openai.api_key = OPENAI_API_KEY
 
@@ -266,7 +294,8 @@ async def get_answer(prompt: str, state: FSMContext) -> str:
     temperature = float(data.get("temperature", OPENAI_DEFAULT_TEMPERATURE))
     max_tokens = int(data.get("max_tokens", OPENAI_DEFAULT_MAX_TOKENS))
 
-    messages = [{"role": "user", "content": prompt}]
+    data = await state.get_data()
+    messages: List[Dict[str, str]] = data.get("saved_messages", [{"role": "user", "content": prompt}])
 
     if max_tokens == 0:
         response = await openai.ChatCompletion.acreate(
