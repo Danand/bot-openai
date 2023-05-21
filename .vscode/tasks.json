@@ -11,7 +11,7 @@
         {
             "label": "pip-restore",
             "type": "shell",
-            "command": "(cd ${workspaceFolder} && source ./.venv/bin/activate && pip install --require-virtualenv -r requirements.txt)",
+            "command": "(cd ${workspaceFolder}/bot && source ./.venv/bin/activate && pip install --require-virtualenv -r requirements.txt)",
             "presentation": { "reveal": "never" },
             "group": "build",
         },

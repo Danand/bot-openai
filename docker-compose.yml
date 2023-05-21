@@ -5,7 +5,7 @@ services:
     depends_on:
       - redis
     build:
-      context: .
+      context: ./bot
       dockerfile: ./Dockerfile
     environment:
       IS_IN_DOCKER: "True"

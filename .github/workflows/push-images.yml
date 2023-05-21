@@ -42,7 +42,7 @@ jobs:
           --file=./Dockerfile \
           --tag=${{ steps.docker-image-tag.outputs.image-tag }} \
           --build-arg="REQUIREMENTS_MD5=$(md5sum ./requirements.txt | cut -d " " -f 1)" \
-          .
+          ./bot
     - name: Assign additional tags
       shell: bash
       run: |

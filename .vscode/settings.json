@@ -25,9 +25,10 @@
     "[а-яА-Я]+"
   ],
   "cSpell.words": [
-    "openai",
-    "aiogram",
     "acreate",
-    "simplejson",
+    "aiogram",
+    "davinci",
+    "openai",
+    "simplejson"
   ]
 }
