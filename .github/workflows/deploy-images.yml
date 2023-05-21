@@ -99,8 +99,8 @@ jobs:
               ghcr.io && \
             cd ${{ env.DEPLOY_PATH }} && \
             docker-compose \
-              --file="./docker-compose.yml"
-              --file="./docker-compose-deploy.yml"
+              --file="./docker-compose.yml" \
+              --file="./docker-compose-deploy.yml" \
               up \
               --detach \
               --build \
