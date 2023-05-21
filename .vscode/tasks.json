@@ -2,11 +2,25 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "pre-build",
+            "dependsOn": [
+                "pip-restore",
+                "launch-redis"
+            ]
+        },
+        {
+            "label": "pip-restore",
+            "type": "shell",
+            "command": "(cd ${workspaceFolder} && source ./.venv/bin/activate && pip install --require-virtualenv -r requirements.txt)",
+            "presentation": { "reveal": "never" },
+            "group": "build",
+        },
+        {
             "label": "launch-redis",
             "type": "shell",
             "command": "${workspaceFolder}/redis-run.sh",
             "presentation": { "reveal": "never" },
             "group": "build",
-        }
+        },
     ]
 }

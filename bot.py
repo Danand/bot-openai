@@ -242,7 +242,7 @@ async def set_model_handler(message: Message, state: FSMContext) -> None:
     models_all = openai.Model.list()["data"] # type: ignore
     models_chat_completion = [model for model in models_all if model.id.startswith("text-davinci") or model.id.startswith("gpt-")]
 
-    await message.reply(# type: ignore
+    await message.reply(
         text="Choose OpenAI model.",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=model.id, callback_data=model.id)] for model in models_chat_completion]))
