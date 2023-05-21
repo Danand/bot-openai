@@ -8,14 +8,12 @@ set -a
 source .env
 set +a
 
-container_name="bot-openai-redis"
-
-docker stop "${container_name}" &>/dev/null || true
+docker stop "${REDIS_HOST}" &>/dev/null || true
 
 docker run \
   --rm \
   -d \
   --name \
-  "${container_name}" \
-  -p  "${REDIS_PORT}:6379" \
+  "${REDIS_HOST}" \
+  -p "${REDIS_PORT}:6379" \
   "redis:${REDIS_VERSION}"

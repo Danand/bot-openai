@@ -1,11 +1,16 @@
-from os import environ as env
-from typing import List, Dict
-
 import sys
 import openai
 import asyncio
 
 import logging as log
+import simplejson as json
+import pkg_resources as packages
+
+from os import environ as env
+from typing import List, Dict
+from distutils.util import strtobool
+
+from redis.asyncio.client import Redis
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import Filter
@@ -30,36 +35,50 @@ from aiogram.types import (
     ReplyKeyboardRemove
 )
 
-from redis.asyncio.client import Redis
+LOG_LEVEL = env.get("LOG_LEVEL", "INFO")
+
+log_level_int = int(getattr(log, LOG_LEVEL))
 
 log.basicConfig(
     stream=sys.stdout,
-    level=log.DEBUG)
+    level=log_level_int)
 
-is_in_docker = bool(env.get("IS_IN_DOCKER", "False"))
+log.debug(f"Packages:\n{json.dumps([package.project_name for package in packages.working_set], indent=True)}")
+log.debug(f"Environment:\n{json.dumps(dict(env.items()), indent=True)}")
 
+parse_bool = lambda value: bool(strtobool(str(value)))
+
+IS_IN_DOCKER = parse_bool(env.get("IS_IN_DOCKER", "False"))
 TELEGRAM_API_TOKEN: str = env.get("TELEGRAM_API_TOKEN") # type: ignore
 TELEGRAM_WHITELISTED_USERS: str = env.get("TELEGRAM_WHITELISTED_USERS") # type: ignore
 OPENAI_API_KEY: str = env.get("OPENAI_API_KEY") # type: ignore
 OPENAI_DEFAULT_MODEL: str = env.get("OPENAI_DEFAULT_MODEL", "gpt-3.5-turbo") # type: ignore
 OPENAI_DEFAULT_TEMPERATURE: str = env.get("OPENAI_DEFAULT_TEMPERATURE", "1.0") # type: ignore
 OPENAI_DEFAULT_MAX_TOKENS: str = env.get("OPENAI_DEFAULT_MAX_TOKENS", "0") # type: ignore
-REDIS_HOST: str = env.get("REDIS_HOST", "localhost") if is_in_docker else "localhost" # type: ignore
+REDIS_HOST: str = env.get("REDIS_HOST", "localhost") if IS_IN_DOCKER else "localhost" # type: ignore
 REDIS_PORT: int = int(env.get("REDIS_PORT", "6379")) # type: ignore
 
 bot = Bot(token=TELEGRAM_API_TOKEN, parse_mode="Markdown")
+
+log.info("Bot initialized")
 
 redis = Redis(
     host=REDIS_HOST,
     port=REDIS_PORT)
 
+log.info("Redis initialized")
+
 dispatcher = Dispatcher(
     storage=RedisStorage(redis),
     fsm_strategy=FSMStrategy.USER_IN_CHAT)
 
+log.info("Dispatcher initialized")
+
 router = Router()
 
 dispatcher.include_router(router)
+
+log.info("Router included into dispatcher")
 
 class States(StatesGroup):
     default = State()
@@ -88,12 +107,18 @@ class IsNotCommand(Filter):
 
         return not message.text.startswith("/")
 
+class IsNotFromBot(Filter):
+    async def __call__(self, message: Message) -> bool:
+        return message.via_bot is None
+
 class IsNotReply(Filter):
     async def __call__(self, message: Message) -> bool:
         return message.reply_to_message is None
 
 def parse_user_ids(comma_separated: str) -> List[int]:
     return [int(value) for value in comma_separated.split(",")]
+
+log.info("Filters defined")
 
 @router.errors(ExceptionTypeFilter(PermissionError))
 async def access_error_handler(error_event: ErrorEvent) -> None:
@@ -103,12 +128,43 @@ async def access_error_handler(error_event: ErrorEvent) -> None:
         text="Access denied.",
         reply_markup=None)
 
+async def log_message(message: Message, state: FSMContext) -> None:
+    current_state = await state.get_state()
+    data = await state.get_data()
+
+    model = data.get("model", OPENAI_DEFAULT_MODEL)
+    temperature = float(data.get("temperature", OPENAI_DEFAULT_TEMPERATURE))
+    max_tokens = int(data.get("max_tokens", OPENAI_DEFAULT_MAX_TOKENS))
+
+    messages: List[Dict[str, str]] = data.get("saved_messages", [])
+
+    user_id = from_user.id if (from_user := message.from_user) is not None else None
+
+    message_log_data = {
+        "from_user": {
+            "id": user_id
+        },
+        "state": {
+            "name": current_state
+        },
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "messages": {
+            "count": len(messages)
+        },
+    }
+
+    log.debug(f"Message\n{json.dumps(message_log_data, indent=True)}")
+
 @router.message(
     IsNotCommand(),
     IsNotReply(),
     WhitelistedUsers(
         parse_user_ids(TELEGRAM_WHITELISTED_USERS)))
 async def prompt_handler(message: Message, state: FSMContext) -> None:
+    await log_message(message, state)
+
     send_typing_task = asyncio.create_task(send_typing(message))
     send_answer_task = asyncio.create_task(send_prompt(message, state))
 
@@ -294,7 +350,6 @@ async def get_answer(prompt: str, state: FSMContext) -> str:
     temperature = float(data.get("temperature", OPENAI_DEFAULT_TEMPERATURE))
     max_tokens = int(data.get("max_tokens", OPENAI_DEFAULT_MAX_TOKENS))
 
-    data = await state.get_data()
     messages: List[Dict[str, str]] = data.get("saved_messages", [{"role": "user", "content": prompt}])
 
     if max_tokens == 0:
@@ -312,4 +367,5 @@ async def get_answer(prompt: str, state: FSMContext) -> str:
     return response.choices[0].message.content # type: ignore
 
 if __name__ == '__main__':
+    log.info("About to run polling")
     dispatcher.run_polling(bot)

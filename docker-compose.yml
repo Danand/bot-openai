@@ -1,0 +1,33 @@
+services:
+  bot:
+    hostname: bot-openai-bot
+    container_name: bot-openai-bot
+    depends_on:
+      - redis
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      IS_IN_DOCKER: "True"
+      LOG_LEVEL: "${LOG_LEVEL}"
+      TELEGRAM_API_TOKEN: ${TELEGRAM_API_TOKEN}
+      TELEGRAM_WHITELISTED_USERS: ${TELEGRAM_WHITELISTED_USERS}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_DEFAULT_MODEL: ${OPENAI_DEFAULT_MODEL}
+      OPENAI_DEFAULT_TEMPERATURE: ${OPENAI_DEFAULT_TEMPERATURE}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+
+  redis:
+    hostname: ${REDIS_HOST}
+    container_name: bot-openai-redis
+    image: redis:${REDIS_VERSION}
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    volumes:
+      - redis_data:/data
+    command: [ "redis-server", "--appendonly", "yes", "--port", "${REDIS_PORT}" ]
+
+volumes:
+  redis_data:
+    driver: local

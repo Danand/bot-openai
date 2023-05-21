@@ -2,3 +2,5 @@ aiogram==3.0.0b7
 openai==0.27.6
 redis==4.5.5
 asyncio==3.4.3
+simplejson==3.19.1
+setuptools==67.8.0
