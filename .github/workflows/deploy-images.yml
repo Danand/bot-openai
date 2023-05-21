@@ -114,6 +114,6 @@ jobs:
               -e "REDIS_HOST=${{ env.REDIS_HOST }}" \
               -e "REDIS_PORT=${{ env.REDIS_PORT }}" \
               -e "REDIS_VERSION=${{ env.REDIS_VERSION }}" \
-              -e "BOT_IMAGE_NAME=${{ steps.docker-image-tag.outputs.image-tag }}"" \
+              -e "BOT_IMAGE_NAME=${{ steps.docker-image-tag.outputs.image-tag }}" \
           "
         rm ${{ env.SSH_KEY_NAME }}
