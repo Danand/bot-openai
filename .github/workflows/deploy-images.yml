@@ -104,6 +104,7 @@ jobs:
               up \
               --detach \
               --build \
+              --force-recreate \
               -e "LOG_LEVEL=${{ inputs.log-level }}" \
               -e "TELEGRAM_API_TOKEN=${{ secrets.TELEGRAM_API_TOKEN }}" \
               -e "TELEGRAM_WHITELISTED_USERS=${{ secrets.TELEGRAM_WHITELISTED_USERS }}" \
