@@ -98,23 +98,24 @@ jobs:
               --password ${{ secrets._GITHUB_PAT }} \
               ghcr.io && \
             cd ${{ env.DEPLOY_PATH }} && \
+            echo "LOG_LEVEL=\"${{ inputs.log-level }}\"" > .env && \
+            echo "TELEGRAM_API_TOKEN=\"${{ secrets.TELEGRAM_API_TOKEN }}\"" >> .env && \
+            echo "TELEGRAM_WHITELISTED_USERS=\"${{ secrets.TELEGRAM_WHITELISTED_USERS }}\"" >> .env && \
+            echo "OPENAI_API_KEY=\"${{ secrets.OPENAI_API_KEY }}\"" >> .env && \
+            echo "OPENAI_DEFAULT_MODEL=\"${{ inputs.openai-default-model }}\"" >> .env && \
+            echo "OPENAI_DEFAULT_TEMPERATURE=\"${{ inputs.openai-default-temperature }}\"" >> .env && \
+            echo "OPENAI_DEFAULT_MAX_TOKENS=\"${{ inputs.openai-default-max-tokens }}\"" >> .env && \
+            echo "REDIS_HOST=\"${{ env.REDIS_HOST }}\"" >> .env && \
+            echo "REDIS_PORT=\"${{ env.REDIS_PORT }}\"" >> .env && \
+            echo "REDIS_VERSION=\"${{ env.REDIS_VERSION }}\"" >> .env && \
+            echo "BOT_IMAGE_NAME=\"${{ steps.docker-image-tag.outputs.image-tag }}\"" >> .env && \
             docker-compose \
-              -f "docker-compose.yml" \
-              -f "docker-compose-deploy.yml" \
+              --file="docker-compose.yml" \
+              --file="docker-compose-deploy.yml" \
+              --env-file=".env" \
               up \
               --detach \
               --build \
               --force-recreate \
-              -e "LOG_LEVEL=${{ inputs.log-level }}" \
-              -e "TELEGRAM_API_TOKEN=${{ secrets.TELEGRAM_API_TOKEN }}" \
-              -e "TELEGRAM_WHITELISTED_USERS=${{ secrets.TELEGRAM_WHITELISTED_USERS }}" \
-              -e "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
-              -e "OPENAI_DEFAULT_MODEL=${{ inputs.openai-default-model }}" \
-              -e "OPENAI_DEFAULT_TEMPERATURE=${{ inputs.openai-default-temperature }}" \
-              -e "OPENAI_DEFAULT_MAX_TOKENS=${{ inputs.openai-default-max-tokens }}" \
-              -e "REDIS_HOST=${{ env.REDIS_HOST }}" \
-              -e "REDIS_PORT=${{ env.REDIS_PORT }}" \
-              -e "REDIS_VERSION=${{ env.REDIS_VERSION }}" \
-              -e "BOT_IMAGE_NAME=${{ steps.docker-image-tag.outputs.image-tag }}" \
           "
         rm ${{ env.SSH_KEY_NAME }}
