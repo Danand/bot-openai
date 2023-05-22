@@ -6,9 +6,6 @@ services:
     container_name: bot-openai-bot
     depends_on:
       - redis
-    build:
-      context: ./bot
-      dockerfile: ./Dockerfile
     environment:
       IS_IN_DOCKER: "True"
       LOG_LEVEL: "${LOG_LEVEL}"
