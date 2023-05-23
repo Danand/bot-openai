@@ -41,6 +41,11 @@ on:
         default: 0
         description: Default limit of tokens on new user session.
         required: false
+      openai-default-max-messages:
+        type: number
+        default: 5
+        description: Default limit of context.
+        required: false
 
 env:
   PRODUCT_NAME: bot-openai
@@ -105,6 +110,7 @@ jobs:
             echo "OPENAI_DEFAULT_MODEL=\"${{ inputs.openai-default-model }}\"" >> .env && \
             echo "OPENAI_DEFAULT_TEMPERATURE=\"${{ inputs.openai-default-temperature }}\"" >> .env && \
             echo "OPENAI_DEFAULT_MAX_TOKENS=\"${{ inputs.openai-default-max-tokens }}\"" >> .env && \
+            echo "OPENAI_DEFAULT_MAX_MESSAGES=\"${{ inputs.openai-default-max-messages }}\"" >> .env && \
             echo "REDIS_HOST=\"${{ env.REDIS_HOST }}\"" >> .env && \
             echo "REDIS_PORT=\"${{ env.REDIS_PORT }}\"" >> .env && \
             echo "REDIS_VERSION=\"${{ env.REDIS_VERSION }}\"" >> .env && \

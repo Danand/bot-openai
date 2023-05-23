@@ -55,6 +55,7 @@ OPENAI_API_KEY: str = env.get("OPENAI_API_KEY") # type: ignore
 OPENAI_DEFAULT_MODEL: str = env.get("OPENAI_DEFAULT_MODEL", "gpt-3.5-turbo") # type: ignore
 OPENAI_DEFAULT_TEMPERATURE: str = env.get("OPENAI_DEFAULT_TEMPERATURE", "1.0") # type: ignore
 OPENAI_DEFAULT_MAX_TOKENS: str = env.get("OPENAI_DEFAULT_MAX_TOKENS", "0") # type: ignore
+OPENAI_DEFAULT_MAX_MESSAGES: str = env.get("OPENAI_DEFAULT_MAX_MESSAGES", "5") # type: ignore
 REDIS_HOST: str = env.get("REDIS_HOST", "localhost") if IS_IN_DOCKER else "localhost" # type: ignore
 REDIS_PORT: int = int(env.get("REDIS_PORT", "6379")) # type: ignore
 
@@ -86,6 +87,7 @@ class States(StatesGroup):
     temperature = State()
     max_tokens = State()
     saved_messages = State()
+    max_messages = State()
 
 class WhitelistedUsers(Filter):
     def __init__(self, ids: List[int]) -> None:
@@ -135,6 +137,7 @@ async def log_message(message: Message, state: FSMContext) -> None:
     model = data.get("model", OPENAI_DEFAULT_MODEL)
     temperature = float(data.get("temperature", OPENAI_DEFAULT_TEMPERATURE))
     max_tokens = int(data.get("max_tokens", OPENAI_DEFAULT_MAX_TOKENS))
+    max_messages = int(data.get("max_messages", OPENAI_DEFAULT_MAX_MESSAGES))
 
     messages: List[Dict[str, str]] = data.get("saved_messages", [])
 
@@ -150,6 +153,7 @@ async def log_message(message: Message, state: FSMContext) -> None:
         "model": model,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "max_messages": max_messages,
         "messages": {
             "count": len(messages)
         },
@@ -195,6 +199,12 @@ async def send_prompt(message: Message, state: FSMContext) -> None:
         await bot.send_message(message.chat.id, answer, parse_mode="Markdown")
 
         saved_messages.append({"role": "assistant", "content": answer})
+
+        max_messages = int(data.get("max_messages", OPENAI_DEFAULT_MAX_MESSAGES))
+
+        if max_messages != 0 and len(saved_messages) > max_messages:
+            saved_messages.pop(0)
+
         await state.update_data(saved_messages=saved_messages)
 
     except Exception as exception:
@@ -224,6 +234,7 @@ async def start_handler(message: Message, state: FSMContext) -> None:
         BotCommand(command="set_temperature", description="Set temperature (creativity)"),
         BotCommand(command="set_model", description="Choose ChatGPT model"),
         BotCommand(command="set_max_tokens", description="Set token limit"),
+        BotCommand(command="set_max_messages", description="Set context limit."),
         BotCommand(command="get_my_telegram_id", description="Get my Telegram ID"),
     ], scope=BotCommandScopeAllPrivateChats(type="all_private_chats"))
 
@@ -334,6 +345,36 @@ async def reply_max_tokens_handler(message: Message, state: FSMContext) -> None:
 
     await message.reply(
         text=f"Token limit changed to {max_tokens}.",
+        reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
+
+@router.message(Command("set_max_messages"))
+async def set_max_messages_handler(message: Message, state: FSMContext) -> None:
+    await state.set_state(States.max_messages)
+
+    await message.reply(
+        text="Enter a number of context limit. 0 is for unlimited.",
+        reply_markup=ForceReply(
+            force_reply=True,
+            input_field_placeholder=OPENAI_DEFAULT_MAX_MESSAGES))
+
+@router.message(States.max_tokens)
+async def reply_max_messages_handler(message: Message, state: FSMContext) -> None:
+    max_messages = message.text
+
+    if max_messages is None or not max_messages.isdigit():
+        await message.reply(
+            text="Enter a correct number of context limit. 0 is for unlimited.",
+            reply_markup=ForceReply(
+                force_reply=True,
+                input_field_placeholder=OPENAI_DEFAULT_MAX_MESSAGES))
+
+        return
+
+    await state.update_data(max_messages=max_messages)
+    await state.set_state(States.default)
+
+    await message.reply(
+        text=f"Context limit changed to {max_messages}.",
         reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
 
 @router.message(Command("reset_conversation"))
