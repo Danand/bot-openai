@@ -192,7 +192,7 @@ async def send_prompt(message: Message, state: FSMContext) -> None:
     try:
         answer = await get_answer(prompt, state)
 
-        await bot.send_message(message.chat.id, answer)
+        await bot.send_message(message.chat.id, answer, parse_mode="Markdown")
 
         saved_messages.append({"role": "assistant", "content": answer})
         await state.update_data(saved_messages=saved_messages)
