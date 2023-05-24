@@ -7,7 +7,7 @@ import simplejson as json
 import pkg_resources as packages
 
 from os import environ as env
-from typing import List, Dict
+from typing import List, Dict, Callable, Coroutine, Any
 from distutils.util import strtobool
 
 from redis.asyncio.client import Redis
@@ -34,6 +34,8 @@ from aiogram.types import (
     ForceReply,
     ReplyKeyboardRemove
 )
+
+SendMessageDelegate = Callable[[Bot, int, str], Coroutine[Any, Any, Message]]]
 
 LOG_LEVEL = env.get("LOG_LEVEL", "INFO")
 
@@ -122,6 +124,13 @@ def parse_user_ids(comma_separated: str) -> List[int]:
 
 log.info("Filters defined")
 
+send_message_delegates: List[SendMessageDelegate] = [
+    lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="Markdown"),
+    lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="MarkdownV2"),
+    lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="HTML"),
+    lambda bot, chat_id, text: bot.send_message(chat_id, text),
+]
+
 @router.errors(ExceptionTypeFilter(PermissionError))
 async def access_error_handler(error_event: ErrorEvent) -> None:
     message : Message = error_event.update.message # type: ignore
@@ -181,6 +190,15 @@ async def prompt_handler(message: Message, state: FSMContext) -> None:
     for undone_task in undone_tasks:
         undone_task.cancel()
 
+async def send_message_with_retry(bot: Bot, chat_id: int, text: str) -> bool:
+    for send_message_delegate in send_message_delegates:
+        try:
+            await send_message_delegate(bot, chat_id, text)
+            break
+        except BaseException as send_exception:
+            if "can't parse entities" not in send_exception.args[0]:
+                raise
+
 async def send_prompt(message: Message, state: FSMContext) -> None:
     prompt = message.text
 
@@ -196,8 +214,6 @@ async def send_prompt(message: Message, state: FSMContext) -> None:
     try:
         answer = await get_answer(prompt, state)
 
-        await bot.send_message(message.chat.id, answer, parse_mode="Markdown")
-
         saved_messages.append({"role": "assistant", "content": answer})
 
         max_messages = int(data.get("max_messages", OPENAI_DEFAULT_MAX_MESSAGES))
@@ -207,7 +223,9 @@ async def send_prompt(message: Message, state: FSMContext) -> None:
 
         await state.update_data(saved_messages=saved_messages)
 
-    except Exception as exception:
+        await send_message_with_retry(bot, message.chat.id, answer)
+
+    except BaseException as exception:
         log.error(exception)
         text = f"Exception occurred:\n```log\n{exception}\n```"
         await bot.send_message(message.chat.id, text)
