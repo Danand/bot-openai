@@ -35,7 +35,7 @@ from aiogram.types import (
     ReplyKeyboardRemove
 )
 
-SendMessageDelegate = Callable[[Bot, int, str], Coroutine[Any, Any, Message]]]
+SendMessageDelegate = Callable[[Bot, int, str], Coroutine[Any, Any, Message]]
 
 LOG_LEVEL = env.get("LOG_LEVEL", "INFO")
 
