@@ -54,7 +54,9 @@ log.basicConfig(
     stream=sys.stdout,
     level=log_level_int)
 
-log.debug(f"Packages:\n{json.dumps([package.project_name for package in packages.working_set], indent=True)}") # type: ignore
+working_set = [] if packages.working_set is None else packages.working_set
+
+log.debug(f"Packages:\n{json.dumps([package.project_name for package in working_set], indent=True)}")
 log.debug(f"Environment:\n{json.dumps(dict(env.items()), indent=True)}")
 
 parse_bool = lambda value: bool(strtobool(str(value)))
