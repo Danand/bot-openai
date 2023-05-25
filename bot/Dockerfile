@@ -4,6 +4,8 @@ WORKDIR /bot
 
 COPY ./requirements.txt .
 
+ARG REQUIREMENTS_MD5
+
 RUN pip install -r requirements.txt
 RUN pip install pylint
 
