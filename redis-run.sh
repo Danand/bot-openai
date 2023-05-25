@@ -9,6 +9,7 @@ source .env
 set +a
 
 docker stop "${REDIS_HOST}" &>/dev/null || true
+docker remove "${REDIS_HOST}" &>/dev/null || true
 
 docker run \
   --rm \

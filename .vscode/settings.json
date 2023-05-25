@@ -28,7 +28,10 @@
     "acreate",
     "aiogram",
     "davinci",
+    "lrange",
+    "lrem",
     "openai",
+    "rpush",
     "simplejson"
   ]
 }

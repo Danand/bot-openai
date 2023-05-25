@@ -1,14 +1,22 @@
 import sys
 import openai
 import asyncio
+import inspect
 
 import logging as log
 import simplejson as json
 import pkg_resources as packages
 
 from os import environ as env
-from typing import List, Dict, Callable, Coroutine, Any
 from distutils.util import strtobool
+
+from typing import (
+    List,
+    Dict,
+    Callable,
+    Coroutine,
+    Any,
+)
 
 from redis.asyncio.client import Redis
 
@@ -20,6 +28,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.strategy import FSMStrategy
 from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.enums import BotCommandScopeType
 from aiogram.enums.chat_action import ChatAction
 
 from aiogram.types import (
@@ -27,12 +36,12 @@ from aiogram.types import (
     User,
     ErrorEvent,
     BotCommand,
-    BotCommandScopeAllPrivateChats,
+    BotCommandScopeChat,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
     ForceReply,
-    ReplyKeyboardRemove
+    ReplyKeyboardRemove,
 )
 
 SendMessageDelegate = Callable[[Bot, int, str], Coroutine[Any, Any, Message]]
@@ -45,14 +54,17 @@ log.basicConfig(
     stream=sys.stdout,
     level=log_level_int)
 
-log.debug(f"Packages:\n{json.dumps([package.project_name for package in packages.working_set], indent=True)}")
+log.debug(f"Packages:\n{json.dumps([package.project_name for package in packages.working_set], indent=True)}") # type: ignore
 log.debug(f"Environment:\n{json.dumps(dict(env.items()), indent=True)}")
 
 parse_bool = lambda value: bool(strtobool(str(value)))
 
+def parse_user_ids(comma_separated: str) -> List[int]:
+    return [int(value) for value in comma_separated.split(",")]
+
 IS_IN_DOCKER = parse_bool(env.get("IS_IN_DOCKER", "False"))
 TELEGRAM_API_TOKEN: str = env.get("TELEGRAM_API_TOKEN") # type: ignore
-TELEGRAM_WHITELISTED_USERS: str = env.get("TELEGRAM_WHITELISTED_USERS") # type: ignore
+TELEGRAM_WHITELISTED_USERS: List[int] = parse_user_ids(env.get("TELEGRAM_WHITELISTED_USERS")) # type: ignore
 OPENAI_API_KEY: str = env.get("OPENAI_API_KEY") # type: ignore
 OPENAI_DEFAULT_MODEL: str = env.get("OPENAI_DEFAULT_MODEL", "gpt-3.5-turbo") # type: ignore
 OPENAI_DEFAULT_TEMPERATURE: str = env.get("OPENAI_DEFAULT_TEMPERATURE", "1.0") # type: ignore
@@ -60,6 +72,8 @@ OPENAI_DEFAULT_MAX_TOKENS: str = env.get("OPENAI_DEFAULT_MAX_TOKENS", "0") # typ
 OPENAI_DEFAULT_MAX_MESSAGES: str = env.get("OPENAI_DEFAULT_MAX_MESSAGES", "5") # type: ignore
 REDIS_HOST: str = env.get("REDIS_HOST", "localhost") if IS_IN_DOCKER else "localhost" # type: ignore
 REDIS_PORT: int = int(env.get("REDIS_PORT", "6379")) # type: ignore
+
+log.info("Environment parsed")
 
 bot = Bot(token=TELEGRAM_API_TOKEN, parse_mode="Markdown")
 
@@ -90,13 +104,18 @@ class States(StatesGroup):
     max_tokens = State()
     saved_messages = State()
     max_messages = State()
+    add_user = State()
+    remove_user = State()
 
 class WhitelistedUsers(Filter):
     def __init__(self, ids: List[int]) -> None:
-        self.ids : List[int] = ids
+        self.ids: List[int] = ids
 
     async def __call__(self, message: Message) -> bool:
-        user : User = message.from_user # type: ignore
+        if message.from_user is None:
+            return False
+
+        user: User = message.from_user
 
         is_valid = any([id == user.id for id in self.ids])
 
@@ -104,6 +123,42 @@ class WhitelistedUsers(Filter):
             raise PermissionError()
 
         return is_valid
+
+class AddedUsers(Filter):
+    def __init__(self, redis: Redis) -> None:
+        self.redis: Redis = redis
+
+    async def __call__(self, message: Message) -> bool:
+        if message.from_user is None:
+            raise PermissionError("Failed to detect you")
+
+        user: User = message.from_user
+
+        lrange_task = redis.lrange("users", 0, -1)
+
+        if not inspect.isawaitable(lrange_task):
+            raise PermissionError("Failed to read list of users")
+
+        ids: List[int] = await lrange_task
+
+        is_valid = any([int(id) == user.id for id in ids])
+
+        if not is_valid:
+            raise PermissionError()
+
+        return is_valid
+
+class AuthorizedOnly(Filter):
+    def __init__(self, redis: Redis, whitelisted_ids: List[int]) -> None:
+        self.redis: Redis = redis
+        self.whitelisted_ids: List[int] = whitelisted_ids
+
+    async def __call__(self, message: Message) -> bool:
+        try:
+            return await AddedUsers(self.redis).__call__(message)
+        except PermissionError:
+            return await WhitelistedUsers(self.whitelisted_ids).__call__(message)
+
 class IsNotCommand(Filter):
     async def __call__(self, message: Message) -> bool:
         if message.text is None:
@@ -118,9 +173,6 @@ class IsNotFromBot(Filter):
 class IsNotReply(Filter):
     async def __call__(self, message: Message) -> bool:
         return message.reply_to_message is None
-
-def parse_user_ids(comma_separated: str) -> List[int]:
-    return [int(value) for value in comma_separated.split(",")]
 
 log.info("Filters defined")
 
@@ -173,8 +225,7 @@ async def log_message(message: Message, state: FSMContext) -> None:
 @router.message(
     IsNotCommand(),
     IsNotReply(),
-    WhitelistedUsers(
-        parse_user_ids(TELEGRAM_WHITELISTED_USERS)))
+    AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
 async def prompt_handler(message: Message, state: FSMContext) -> None:
     await log_message(message, state)
 
@@ -247,14 +298,44 @@ async def start_handler(message: Message, state: FSMContext) -> None:
 
     await message.reply("Hi! Write your prompt or check out available commands.")
 
-    await bot.set_my_commands(commands=[
-        BotCommand(command="reset_conversation", description="Reset conversation"),
+    commands_non_authorized = [
+        BotCommand(command="get_my_telegram_id", description="Get my Telegram ID"),
+        BotCommand(command="start", description="Refresh commands"),
+    ]
+
+    commands_authorized = [
         BotCommand(command="set_temperature", description="Set temperature (creativity)"),
         BotCommand(command="set_model", description="Choose ChatGPT model"),
+        BotCommand(command="reset_conversation", description="Reset conversation"),
+    ]
+
+    commands_elevated = [
         BotCommand(command="set_max_tokens", description="Set token limit"),
         BotCommand(command="set_max_messages", description="Set context limit."),
-        BotCommand(command="get_my_telegram_id", description="Get my Telegram ID"),
-    ], scope=BotCommandScopeAllPrivateChats(type="all_private_chats"))
+        BotCommand(command="add_user", description="Grant access to someone"),
+        BotCommand(command="remove_user", description="Revoke access from someone"),
+    ]
+
+    commands_all = []
+
+    try:
+        await WhitelistedUsers(TELEGRAM_WHITELISTED_USERS).__call__(message)
+        commands_all.append(*commands_authorized)
+        commands_all.append(*commands_elevated)
+    except PermissionError:
+        try:
+            await AddedUsers(redis).__call__(message)
+            commands_all.append(*commands_authorized)
+        except PermissionError:
+            pass
+
+    commands_all.append(*commands_non_authorized)
+
+    await bot.set_my_commands(
+        commands=commands_all,
+        scope=BotCommandScopeChat(
+            type=BotCommandScopeType.CHAT,
+            chat_id=message.chat.id))
 
 @router.message(Command("get_my_telegram_id"))
 async def get_my_telegram_id_handler(message: Message, state: FSMContext) -> None:
@@ -264,7 +345,9 @@ async def get_my_telegram_id_handler(message: Message, state: FSMContext) -> Non
         text=f"`{user.id}`",
         reply_markup=None)
 
-@router.message(Command("set_model"))
+@router.message(
+    Command("set_model"),
+    AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
 async def set_model_handler(message: Message, state: FSMContext) -> None:
     await state.set_state(States.model)
 
@@ -292,7 +375,9 @@ async def callback_query_model_handler(callback_query: CallbackQuery, state: FSM
             chat_id=message.chat.id,
             text=f"Model changed to {model}")
 
-@router.message(Command("set_temperature"))
+@router.message(
+    Command("set_temperature"),
+    AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
 async def set_temperature_handler(message: Message, state: FSMContext) -> None:
     await state.set_state(States.temperature)
 
@@ -335,7 +420,9 @@ async def callback_query_temperature_handler(callback_query: CallbackQuery, stat
             chat_id=message.chat.id,
             text=f"Temperature changed to {temperature}")
 
-@router.message(Command("set_max_tokens"))
+@router.message(
+    Command("set_max_tokens"),
+    AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
 async def set_max_tokens_handler(message: Message, state: FSMContext) -> None:
     await state.set_state(States.max_tokens)
 
@@ -365,7 +452,9 @@ async def reply_max_tokens_handler(message: Message, state: FSMContext) -> None:
         text=f"Token limit changed to {max_tokens}.",
         reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
 
-@router.message(Command("set_max_messages"))
+@router.message(
+    Command("set_max_messages"),
+    AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
 async def set_max_messages_handler(message: Message, state: FSMContext) -> None:
     await state.set_state(States.max_messages)
 
@@ -395,10 +484,68 @@ async def reply_max_messages_handler(message: Message, state: FSMContext) -> Non
         text=f"Context limit changed to {max_messages}.",
         reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
 
-@router.message(Command("reset_conversation"))
+@router.message(
+    Command("reset_conversation"),
+    AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
 async def reset_conversation_handler(message: Message, state: FSMContext) -> None:
     await state.update_data(saved_messages=[])
     await message.reply(f"Conversation forgotten.")
+
+@router.message(
+    Command("add_user"),
+    AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
+async def add_user_handler(message: Message, state: FSMContext) -> None:
+    await state.set_state(States.add_user)
+
+    await message.reply(
+        text="Share contact of user you want to grant access to this bot.",
+        reply_markup=ForceReply(
+            force_reply=True))
+
+@router.message(States.add_user)
+async def reply_add_user_handler(message: Message, state: FSMContext) -> None:
+    contact = message.contact
+
+    if contact is None or contact.user_id is None:
+        await message.reply(f"There is no valid contact of user.")
+        return
+
+    rpush_task = redis.rpush("users", str(contact.user_id))
+
+    if inspect.isawaitable(rpush_task):
+        await rpush_task
+
+    await state.set_state(States.default)
+
+    await message.reply(f"Access granted to user `{contact.user_id}`.")
+
+@router.message(
+    Command("remove_user"),
+    AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
+async def remove_user_handler(message: Message, state: FSMContext) -> None:
+    await state.set_state(States.remove_user)
+
+    await message.reply(
+        text="Share contact of user you want revoke access to this bot.",
+        reply_markup=ForceReply(
+            force_reply=True))
+
+@router.message(States.remove_user)
+async def reply_remove_user_handler(message: Message, state: FSMContext) -> None:
+    contact = message.contact
+
+    if contact is None or contact.user_id is None:
+        await message.reply(f"There is no valid contact of user.")
+        return
+
+    lrem_task = redis.lrem("users", 0, str(contact.user_id))
+
+    if inspect.isawaitable(lrem_task):
+        await lrem_task
+
+    await state.set_state(States.default)
+
+    await message.reply(f"Access revoked from user `{contact.user_id}`.")
 
 async def get_answer(prompt: str, state: FSMContext) -> str:
     openai.api_key = OPENAI_API_KEY
