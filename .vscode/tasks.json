@@ -9,17 +9,27 @@
             ]
         },
         {
+            "label": "venv-ensure",
+            "type": "shell",
+            "command": "(cd ${workspaceFolder}/bot && test -d .venv || python3.11 -m venv .venv)",
+            "presentation": { "reveal": "always" },
+            "group": "build",
+        },
+        {
             "label": "pip-restore",
             "type": "shell",
             "command": "(cd ${workspaceFolder}/bot && source ./.venv/bin/activate && pip install --require-virtualenv -r requirements.txt)",
-            "presentation": { "reveal": "never" },
+            "presentation": { "reveal": "always" },
             "group": "build",
+            "dependsOn": [
+                "venv-ensure",
+            ]
         },
         {
             "label": "launch-redis",
             "type": "shell",
             "command": "${workspaceFolder}/redis-run.sh",
-            "presentation": { "reveal": "never" },
+            "presentation": { "reveal": "always" },
             "group": "build",
         },
     ]
