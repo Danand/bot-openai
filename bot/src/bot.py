@@ -13,9 +13,6 @@ from distutils.util import strtobool
 from typing import (
     List,
     Dict,
-    Callable,
-    Coroutine,
-    Any,
 )
 
 from redis.asyncio.client import Redis
@@ -51,7 +48,9 @@ from filters import (
     AddedUsers,
 )
 
-SendMessageDelegate = Callable[[Bot, int, str], Coroutine[Any, Any, Message]]
+from aliases import (
+    SendMessageDelegate,
+)
 
 LOG_LEVEL = env.get("LOG_LEVEL", "INFO")
 
