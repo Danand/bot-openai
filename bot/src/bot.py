@@ -22,7 +22,6 @@ from aiogram import Bot, Dispatcher, Router
 from aiogram.filters.command import Command, CommandStart
 from aiogram.filters.exception import ExceptionTypeFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.strategy import FSMStrategy
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.enums import BotCommandScopeType
@@ -52,6 +51,8 @@ from filters import (
 from aliases import (
     SendMessageDelegate,
 )
+
+from states import States
 
 env = Env()
 env.read_env(recurse=True)
@@ -103,16 +104,6 @@ router = Router()
 dispatcher.include_router(router)
 
 log.info("Router included into dispatcher")
-
-class States(StatesGroup):
-    default = State()
-    model = State()
-    temperature = State()
-    max_tokens = State()
-    saved_messages = State()
-    max_messages = State()
-    add_user = State()
-    remove_user = State()
 
 send_message_delegates: List[SendMessageDelegate] = [
     lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="Markdown"),
