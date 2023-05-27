@@ -9,10 +9,7 @@ import logging as log
 import simplejson as json
 import pkg_resources as packages
 
-from typing import (
-    List,
-    Dict,
-)
+from typing import List, Dict
 
 from redis.asyncio.client import Redis
 
@@ -48,10 +45,7 @@ from filters import (
     AddedUsers,
 )
 
-from aliases import (
-    SendMessageDelegate,
-)
-
+from aliases import SendMessageDelegate
 from states import States
 
 env = Env()
