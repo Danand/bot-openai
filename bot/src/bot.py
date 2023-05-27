@@ -3,12 +3,11 @@ import openai
 import asyncio
 import inspect
 
+from os import environ
+
 import logging as log
 import simplejson as json
 import pkg_resources as packages
-
-from os import environ as env
-from distutils.util import strtobool
 
 from typing import (
     List,
@@ -16,6 +15,8 @@ from typing import (
 )
 
 from redis.asyncio.client import Redis
+
+from environs import Env
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters.command import Command, CommandStart
@@ -52,36 +53,35 @@ from aliases import (
     SendMessageDelegate,
 )
 
-LOG_LEVEL = env.get("LOG_LEVEL", "INFO")
+env = Env()
+env.read_env(recurse=True)
 
-log_level_int = int(getattr(log, LOG_LEVEL))
+LOG_LEVEL: int = env.log_level("LOG_LEVEL", default=log.INFO)
 
 log.basicConfig(
     stream=sys.stdout,
-    level=log_level_int)
+    level=LOG_LEVEL)
 
+# HACK: Suppress error caused by late initialization of `working_set`
 working_set = [] if packages.working_set is None else packages.working_set
 
 log.debug(f"Packages:\n{json.dumps([package.project_name for package in working_set], indent=True)}")
-log.debug(f"Environment:\n{json.dumps(dict(env.items()), indent=True)}")
+log.debug(f"Environment:\n{json.dumps(dict(environ.items()), indent=True)}")
 
-parse_bool = lambda value: bool(strtobool(str(value)))
+IS_IN_DOCKER: bool = env.bool("IS_IN_DOCKER", default=False)
+TELEGRAM_API_TOKEN: str = env.str("TELEGRAM_API_TOKEN")
+TELEGRAM_WHITELISTED_USERS: List[int] = env.list("TELEGRAM_WHITELISTED_USERS", subcast=int)
+OPENAI_API_KEY: str = env.str("OPENAI_API_KEY")
+OPENAI_DEFAULT_MODEL: str = env.str("OPENAI_DEFAULT_MODEL", default="gpt-3.5-turbo")
+OPENAI_DEFAULT_TEMPERATURE: str = env.str("OPENAI_DEFAULT_TEMPERATURE", default="1.0")
+OPENAI_DEFAULT_MAX_TOKENS: str = env.str("OPENAI_DEFAULT_MAX_TOKENS", default="0")
+OPENAI_DEFAULT_MAX_MESSAGES: str = env.str("OPENAI_DEFAULT_MAX_MESSAGES", default="5")
+REDIS_HOST: str = env.str("REDIS_HOST", default="localhost") if IS_IN_DOCKER else "localhost"
+REDIS_PORT: int = env.int("REDIS_PORT", default="6379")
 
-def parse_user_ids(comma_separated: str) -> List[int]:
-    return [int(value) for value in comma_separated.split(",")]
+env.seal()
 
-IS_IN_DOCKER = parse_bool(env.get("IS_IN_DOCKER", "False"))
-TELEGRAM_API_TOKEN: str = env.get("TELEGRAM_API_TOKEN") # type: ignore
-TELEGRAM_WHITELISTED_USERS: List[int] = parse_user_ids(env.get("TELEGRAM_WHITELISTED_USERS")) # type: ignore
-OPENAI_API_KEY: str = env.get("OPENAI_API_KEY") # type: ignore
-OPENAI_DEFAULT_MODEL: str = env.get("OPENAI_DEFAULT_MODEL", "gpt-3.5-turbo") # type: ignore
-OPENAI_DEFAULT_TEMPERATURE: str = env.get("OPENAI_DEFAULT_TEMPERATURE", "1.0") # type: ignore
-OPENAI_DEFAULT_MAX_TOKENS: str = env.get("OPENAI_DEFAULT_MAX_TOKENS", "0") # type: ignore
-OPENAI_DEFAULT_MAX_MESSAGES: str = env.get("OPENAI_DEFAULT_MAX_MESSAGES", "5") # type: ignore
-REDIS_HOST: str = env.get("REDIS_HOST", "localhost") if IS_IN_DOCKER else "localhost" # type: ignore
-REDIS_PORT: int = int(env.get("REDIS_PORT", "6379")) # type: ignore
-
-log.info("Environment parsed")
+log.debug(f"Environment parsed:\n{env.dump()}")
 
 bot = Bot(token=TELEGRAM_API_TOKEN, parse_mode="Markdown")
 
@@ -100,7 +100,6 @@ dispatcher = Dispatcher(
 log.info("Dispatcher initialized")
 
 router = Router()
-
 dispatcher.include_router(router)
 
 log.info("Router included into dispatcher")
