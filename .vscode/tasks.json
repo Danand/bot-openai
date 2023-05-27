@@ -2,10 +2,16 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "pre-build",
+            "label": "pre-launch",
             "dependsOn": [
                 "pip-restore",
-                "launch-redis"
+                "redis-run"
+            ]
+        },
+        {
+            "label": "post-debug",
+            "dependsOn": [
+                "redis-stop"
             ]
         },
         {
@@ -26,10 +32,17 @@
             ]
         },
         {
-            "label": "launch-redis",
+            "label": "redis-run",
             "type": "shell",
             "command": "${workspaceFolder}/redis-run.sh",
             "presentation": { "reveal": "always" },
+            "group": "build",
+        },
+        {
+            "label": "redis-stop",
+            "type": "shell",
+            "command": "${workspaceFolder}/redis-stop.sh",
+            "presentation": { "reveal": "never" },
             "group": "build",
         },
     ]
