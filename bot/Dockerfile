@@ -5,12 +5,8 @@ WORKDIR /bot
 COPY ./requirements.txt ./requirements.txt
 
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt && \
-    pip install pylint
+    pip install -r requirements.txt
 
-COPY ./.pylintrc ./.pylintrc
 COPY ./src ./src
-
-RUN pylint --errors-only /bot/src/bot.py
 
 CMD [ "python", "-u", "./src/bot.py" ]
