@@ -249,7 +249,7 @@ async def send_message_with_retry(bot: Bot, chat_id: int, text: str) -> None:
             await send_message_delegate(bot, chat_id, text)
             break
         except BaseException as send_exception:
-            if "can't parse entities" not in send_exception.args[0]:
+            if all(arg for arg in send_exception.args if "can't parse entities" not in arg):
                 raise
 
 async def send_prompt(message: Message, state: FSMContext) -> None:
