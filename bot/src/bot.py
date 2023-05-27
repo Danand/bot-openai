@@ -121,6 +121,9 @@ async def access_error_handler(error_event: ErrorEvent) -> None:
         reply_markup=None)
 
 async def log_message(message: Message, state: FSMContext) -> None:
+    if LOG_LEVEL > log.DEBUG:
+        return
+
     current_state = await state.get_state()
     data = await state.get_data()
 
