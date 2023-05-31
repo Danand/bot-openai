@@ -101,9 +101,8 @@ log.info("Router included into dispatcher")
 
 send_message_delegates: List[SendMessageDelegate] = [
     lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="Markdown"),
-    lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="MarkdownV2"),
-    lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="HTML"),
     lambda bot, chat_id, text: bot.send_message(chat_id, text),
+    lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="HTML"),
 ]
 
 @router.errors(ExceptionTypeFilter(PermissionError))
@@ -112,7 +111,8 @@ async def access_error_handler(error_event: ErrorEvent) -> None:
 
     await message.reply(
         text="Access denied.",
-        reply_markup=None)
+        reply_markup=ReplyKeyboardRemove(
+            remove_keyboard=True))
 
 async def log_message(message: Message, state: FSMContext) -> None:
     if LOG_LEVEL > log.DEBUG:
@@ -173,6 +173,8 @@ async def send_message_with_retry(bot: Bot, chat_id: int, text: str) -> None:
             await send_message_delegate(bot, chat_id, text)
             break
         except BaseException as send_exception:
+            log.error(f"Cannot parse answer:\n{text}")
+
             if all(arg for arg in send_exception.args if "can't parse entities" not in arg):
                 raise
 
@@ -222,7 +224,10 @@ async def send_typing(message: Message) -> None:
 async def start_handler(message: Message, state: FSMContext) -> None:
     await state.set_state(States.default)
 
-    await message.reply("Hi! Write your prompt or check out available commands.")
+    await message.reply(
+        text="Hi! Write your prompt or check out available commands.",
+        reply_markup=ReplyKeyboardRemove(
+            remove_keyboard=True))
 
     commands_non_authorized = [
         BotCommand(command="get_my_telegram_id", description="Get my Telegram ID"),
@@ -269,7 +274,8 @@ async def get_my_telegram_id_handler(message: Message, state: FSMContext) -> Non
 
     await message.reply(
         text=f"`{user.id}`",
-        reply_markup=None)
+        reply_markup=ReplyKeyboardRemove(
+            remove_keyboard=True))
 
 @router.message(
     Command("set_model"),
@@ -328,7 +334,8 @@ async def set_temperature_handler(message: Message, state: FSMContext) -> None:
 
     await message.reply(
         text="Choose creativity for responses.",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=buttons))
 
 @router.callback_query(States.temperature)
 async def callback_query_temperature_handler(callback_query: CallbackQuery, state: FSMContext) -> None:
@@ -376,7 +383,8 @@ async def reply_max_tokens_handler(message: Message, state: FSMContext) -> None:
 
     await message.reply(
         text=f"Token limit changed to {max_tokens}.",
-        reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
+        reply_markup=ReplyKeyboardRemove(
+            remove_keyboard=True))
 
 @router.message(
     Command("set_max_messages"),
@@ -408,14 +416,18 @@ async def reply_max_messages_handler(message: Message, state: FSMContext) -> Non
 
     await message.reply(
         text=f"Context limit changed to {max_messages}.",
-        reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
+        reply_markup=ReplyKeyboardRemove(
+            remove_keyboard=True))
 
 @router.message(
     Command("reset_conversation"),
     AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
 async def reset_conversation_handler(message: Message, state: FSMContext) -> None:
     await state.update_data(saved_messages=[])
-    await message.reply(f"Conversation forgotten.")
+    await message.reply(
+        text=f"Conversation forgotten.",
+        reply_markup=ReplyKeyboardRemove(
+            remove_keyboard=True))
 
 @router.message(
     Command("add_user"),
@@ -433,7 +445,13 @@ async def reply_add_user_handler(message: Message, state: FSMContext) -> None:
     contact = message.contact
 
     if contact is None or contact.user_id is None:
-        await message.reply(f"There is no valid contact of user.")
+        await message.reply(
+            text=f"There is no valid contact of user.",
+            reply_markup=ReplyKeyboardRemove(
+                remove_keyboard=True))
+
+        await state.set_state(States.default)
+
         return
 
     rpush_task = redis.rpush("users", str(contact.user_id))
@@ -443,7 +461,10 @@ async def reply_add_user_handler(message: Message, state: FSMContext) -> None:
 
     await state.set_state(States.default)
 
-    await message.reply(f"Access granted to user `{contact.user_id}`.")
+    await message.reply(
+        text=f"Access granted to user `{contact.user_id}`.",
+        reply_markup=ReplyKeyboardRemove(
+            remove_keyboard=True))
 
 @router.message(
     Command("remove_user"),
@@ -461,7 +482,13 @@ async def reply_remove_user_handler(message: Message, state: FSMContext) -> None
     contact = message.contact
 
     if contact is None or contact.user_id is None:
-        await message.reply(f"There is no valid contact of user.")
+        await message.reply(
+            text=f"There is no valid contact of user.",
+            reply_markup=ReplyKeyboardRemove(
+                remove_keyboard=True))
+
+        await state.set_state(States.default)
+
         return
 
     lrem_task = redis.lrem("users", 0, str(contact.user_id))
@@ -471,7 +498,10 @@ async def reply_remove_user_handler(message: Message, state: FSMContext) -> None
 
     await state.set_state(States.default)
 
-    await message.reply(f"Access revoked from user `{contact.user_id}`.")
+    await message.reply(
+        text=f"Access revoked from user `{contact.user_id}`.",
+        reply_markup=ReplyKeyboardRemove(
+            remove_keyboard=True))
 
 async def get_answer(prompt: str, state: FSMContext) -> str:
     openai.api_key = OPENAI_API_KEY
