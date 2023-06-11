@@ -70,7 +70,7 @@ TELEGRAM_WHITELISTED_USERS: List[int] = env.list("TELEGRAM_WHITELISTED_USERS", s
 OPENAI_API_KEY: str = env.str("OPENAI_API_KEY")
 OPENAI_DEFAULT_MODEL: str = env.str("OPENAI_DEFAULT_MODEL", default="gpt-3.5-turbo")
 OPENAI_DEFAULT_TEMPERATURE: str = env.str("OPENAI_DEFAULT_TEMPERATURE", default="1.0")
-OPENAI_DEFAULT_MAX_TOKENS: str = env.str("OPENAI_DEFAULT_MAX_TOKENS", default="0")
+OPENAI_DEFAULT_MAX_TOKENS: str = env.str("OPENAI_DEFAULT_MAX_TOKENS", default="4097")
 OPENAI_DEFAULT_MAX_MESSAGES: str = env.str("OPENAI_DEFAULT_MAX_MESSAGES", default="5")
 REDIS_HOST: str = env.str("REDIS_HOST", default="localhost") if IS_IN_DOCKER else "localhost"
 REDIS_PORT: int = env.int("REDIS_PORT", default="6379")
@@ -522,17 +522,11 @@ async def get_answer(prompt: str, state: FSMContext) -> str:
 
     messages: List[Dict[str, str]] = data.get("saved_messages", [{"role": "user", "content": prompt}])
 
-    if max_tokens == 0:
-        response = await openai.ChatCompletion.acreate(
-            model=model,
-            temperature=temperature,
-            messages=messages)
-    else:
-        response = await openai.ChatCompletion.acreate(
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            messages=messages)
+    response = await openai.ChatCompletion.acreate(
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        messages=messages)
 
     return response.choices[0].message.content # type: ignore
 
