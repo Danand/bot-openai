@@ -432,6 +432,7 @@ async def reply_max_messages_handler(message: Message, state: FSMContext) -> Non
     AuthorizedOnly(redis, TELEGRAM_WHITELISTED_USERS))
 async def reset_conversation_handler(message: Message, state: FSMContext) -> None:
     await state.update_data(saved_messages=[])
+
     await message.reply(
         text=f"Conversation forgotten.",
         reply_markup=ReplyKeyboardRemove(
@@ -522,11 +523,26 @@ async def get_answer(prompt: str, state: FSMContext) -> str:
 
     messages: List[Dict[str, str]] = data.get("saved_messages", [{"role": "user", "content": prompt}])
 
-    response = await openai.ChatCompletion.acreate(
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        messages=messages)
+    response = None
+
+    while True:
+        try:
+            response = await openai.ChatCompletion.acreate(
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                messages=messages)
+
+            break
+
+        except BaseException as answer_exception:
+            if "maximum context length" not in str(answer_exception):
+                raise
+
+            if len(messages) > 1:
+                messages.pop(0)
+
+            await state.update_data(saved_messages=messages)
 
     return response.choices[0].message.content # type: ignore
 
