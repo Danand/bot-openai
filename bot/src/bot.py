@@ -47,6 +47,7 @@ from filters import (
 
 from aliases import SendMessageDelegate
 from states import States
+from utils import strip_markdown
 
 env = Env()
 env.read_env(recurse=True)
@@ -103,6 +104,7 @@ send_message_delegates: List[SendMessageDelegate] = [
     lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="Markdown"),
     lambda bot, chat_id, text: bot.send_message(chat_id, text),
     lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="HTML"),
+    lambda bot, chat_id, text: bot.send_message(chat_id, strip_markdown(text)),
 ]
 
 @router.errors(ExceptionTypeFilter(PermissionError))
@@ -168,6 +170,8 @@ async def prompt_handler(message: Message, state: FSMContext) -> None:
         undone_task.cancel()
 
 async def send_message_with_retry(bot: Bot, chat_id: int, text: str) -> None:
+    last_exception: BaseException | None = None
+
     for send_message_delegate in send_message_delegates:
         try:
             await send_message_delegate(bot, chat_id, text)
@@ -175,11 +179,15 @@ async def send_message_with_retry(bot: Bot, chat_id: int, text: str) -> None:
         except BaseException as send_exception:
             log.error(f"Cannot parse answer:\n{text}")
 
-            if all(arg for arg in send_exception.args if "can't parse entities" not in arg):
+            if "parse entities" not in str(send_exception):
                 raise
 
+            last_exception = send_exception
+
+    raise Exception("Totally unknown exception") if last_exception is None else last_exception
+
 async def send_prompt(message: Message, state: FSMContext) -> None:
-    prompt = message.text
+    prompt = f"{message.text}\n\nAnswer in standard Markdown."
 
     if (prompt is None or len(prompt) == 0):
         return
