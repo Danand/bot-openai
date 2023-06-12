@@ -175,7 +175,7 @@ async def send_message_with_retry(bot: Bot, chat_id: int, text: str) -> None:
     for send_message_delegate in send_message_delegates:
         try:
             await send_message_delegate(bot, chat_id, text)
-            break
+            return
         except BaseException as send_exception:
             log.error(f"Cannot parse answer:\n{text}")
 
