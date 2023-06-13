@@ -37,7 +37,7 @@ This is a repository for a chatbot built using OpenAI's chat completion API. It 
    OPENAI_DEFAULT_MODEL="gpt-3.5-turbo"
    OPENAI_DEFAULT_TEMPERATURE="1.0"
    OPENAI_DEFAULT_MAX_TOKENS="4097"
-   OPENAI_DEFAULT_MAX_MESSAGES="5"
+   OPENAI_DEFAULT_MAX_MESSAGES="6"
 
    REDIS_HOST="bot-openai-redis"
    REDIS_PORT=6380

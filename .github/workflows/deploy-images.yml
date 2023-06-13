@@ -38,12 +38,12 @@ on:
         required: false
       openai-default-max-tokens:
         type: number
-        default: 0
+        default: 4097
         description: Default limit of tokens on new user session.
         required: false
       openai-default-max-messages:
         type: number
-        default: 5
+        default: 6
         description: Default limit of context.
         required: false
 

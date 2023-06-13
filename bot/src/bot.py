@@ -2,6 +2,7 @@ import sys
 import openai
 import asyncio
 import inspect
+import time
 
 from os import environ
 
@@ -64,14 +65,16 @@ working_set = [] if packages.working_set is None else packages.working_set
 log.debug(f"Packages:\n{json.dumps([package.project_name for package in working_set], indent=True)}")
 log.debug(f"Environment:\n{json.dumps(dict(environ.items()), indent=True)}")
 
+OPENAI_DEFAULT_MAX_TOKENS_LIMIT: int = 4097
+
 IS_IN_DOCKER: bool = env.bool("IS_IN_DOCKER", default=False)
 TELEGRAM_API_TOKEN: str = env.str("TELEGRAM_API_TOKEN")
 TELEGRAM_WHITELISTED_USERS: List[int] = env.list("TELEGRAM_WHITELISTED_USERS", subcast=int)
 OPENAI_API_KEY: str = env.str("OPENAI_API_KEY")
 OPENAI_DEFAULT_MODEL: str = env.str("OPENAI_DEFAULT_MODEL", default="gpt-3.5-turbo")
-OPENAI_DEFAULT_TEMPERATURE: str = env.str("OPENAI_DEFAULT_TEMPERATURE", default="1.0")
-OPENAI_DEFAULT_MAX_TOKENS: str = env.str("OPENAI_DEFAULT_MAX_TOKENS", default="4097")
-OPENAI_DEFAULT_MAX_MESSAGES: str = env.str("OPENAI_DEFAULT_MAX_MESSAGES", default="5")
+OPENAI_DEFAULT_TEMPERATURE: float = env.float("OPENAI_DEFAULT_TEMPERATURE", default=1.0)
+OPENAI_DEFAULT_MAX_TOKENS: int = env.int("OPENAI_DEFAULT_MAX_TOKENS", default=OPENAI_DEFAULT_MAX_TOKENS_LIMIT)
+OPENAI_DEFAULT_MAX_MESSAGES: int = env.int("OPENAI_DEFAULT_MAX_MESSAGES", default=6)
 REDIS_HOST: str = env.str("REDIS_HOST", default="localhost") if IS_IN_DOCKER else "localhost"
 REDIS_PORT: int = env.int("REDIS_PORT", default="6379")
 
@@ -187,7 +190,7 @@ async def send_message_with_retry(bot: Bot, chat_id: int, text: str) -> None:
     raise Exception("Totally unknown exception") if last_exception is None else last_exception
 
 async def send_prompt(message: Message, state: FSMContext) -> None:
-    prompt = f"{message.text}\n\nAnswer in standard Markdown."
+    prompt = message.text
 
     if (prompt is None or len(prompt) == 0):
         return
@@ -368,10 +371,10 @@ async def set_max_tokens_handler(message: Message, state: FSMContext) -> None:
     await state.set_state(States.max_tokens)
 
     await message.reply(
-        text="Enter a number of token limit per response. 0 is for unlimited.",
+        text="Enter a number of token limit per response. {OPENAI_DEFAULT_MAX_TOKENS_LIMIT} is maximum.",
         reply_markup=ForceReply(
             force_reply=True,
-            input_field_placeholder=OPENAI_DEFAULT_MAX_TOKENS))
+            input_field_placeholder=str(OPENAI_DEFAULT_MAX_TOKENS)))
 
 @router.message(States.max_tokens)
 async def reply_max_tokens_handler(message: Message, state: FSMContext) -> None:
@@ -379,10 +382,10 @@ async def reply_max_tokens_handler(message: Message, state: FSMContext) -> None:
 
     if max_tokens is None or not max_tokens.isdigit():
         await message.reply(
-            text="Enter a correct number of token limit per response. 0 is for unlimited.",
+            text="Enter a correct number of token limit per response. {OPENAI_DEFAULT_MAX_TOKENS_LIMIT} is maximum",
             reply_markup=ForceReply(
                 force_reply=True,
-                input_field_placeholder=OPENAI_DEFAULT_MAX_TOKENS))
+                input_field_placeholder=str(OPENAI_DEFAULT_MAX_TOKENS)))
 
         return
 
@@ -404,7 +407,7 @@ async def set_max_messages_handler(message: Message, state: FSMContext) -> None:
         text="Enter a number of context limit. 0 is for unlimited.",
         reply_markup=ForceReply(
             force_reply=True,
-            input_field_placeholder=OPENAI_DEFAULT_MAX_MESSAGES))
+            input_field_placeholder=str(OPENAI_DEFAULT_MAX_MESSAGES)))
 
 @router.message(States.max_tokens)
 async def reply_max_messages_handler(message: Message, state: FSMContext) -> None:
@@ -415,7 +418,7 @@ async def reply_max_messages_handler(message: Message, state: FSMContext) -> Non
             text="Enter a correct number of context limit. 0 is for unlimited.",
             reply_markup=ForceReply(
                 force_reply=True,
-                input_field_placeholder=OPENAI_DEFAULT_MAX_MESSAGES))
+                input_field_placeholder=str(OPENAI_DEFAULT_MAX_MESSAGES)))
 
         return
 
@@ -520,31 +523,37 @@ async def get_answer(prompt: str, state: FSMContext) -> str:
     model = data.get("model", OPENAI_DEFAULT_MODEL)
     temperature = float(data.get("temperature", OPENAI_DEFAULT_TEMPERATURE))
     max_tokens = int(data.get("max_tokens", OPENAI_DEFAULT_MAX_TOKENS))
+    max_messages = int(data.get("max_messages", OPENAI_DEFAULT_MAX_MESSAGES))
 
     messages: List[Dict[str, str]] = data.get("saved_messages", [{"role": "user", "content": prompt}])
-
-    response = None
 
     while True:
         try:
             response = await openai.ChatCompletion.acreate(
                 model=model,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_tokens=None if max_tokens == OPENAI_DEFAULT_MAX_TOKENS_LIMIT else max_tokens,
                 messages=messages)
 
-            break
+            return response.choices[0].message.content # type: ignore
 
         except BaseException as answer_exception:
-            if "maximum context length" not in str(answer_exception):
+            if "maximum context length" in str(answer_exception):
+                if len(messages) > 1:
+                    messages.pop(0)
+                else:
+                    raise
+            # Prevent flood:
+            elif "tokens per min" in str(answer_exception):
+                if len(messages) > max_messages:
+                    while len(messages) > max_messages:
+                        messages.pop(0)
+
+                time.sleep(60)
+            else:
                 raise
-
-            if len(messages) > 1:
-                messages.pop(0)
-
+        finally:
             await state.update_data(saved_messages=messages)
-
-    return response.choices[0].message.content # type: ignore
 
 if __name__ == '__main__':
     log.info("About to run polling")
