@@ -380,14 +380,19 @@ async def set_max_tokens_handler(message: Message, state: FSMContext) -> None:
 async def reply_max_tokens_handler(message: Message, state: FSMContext) -> None:
     max_tokens = message.text
 
-    if max_tokens is None or not max_tokens.isdigit():
+    if max_tokens is None \
+       or not max_tokens.isdigit() \
+       or int(max_tokens) > OPENAI_DEFAULT_MAX_TOKENS_LIMIT:
         await message.reply(
-            text="Enter a correct number of token limit per response. {OPENAI_DEFAULT_MAX_TOKENS_LIMIT} is maximum",
+            text=f"Enter a correct number of token limit per response. {OPENAI_DEFAULT_MAX_TOKENS_LIMIT} is maximum",
             reply_markup=ForceReply(
                 force_reply=True,
                 input_field_placeholder=str(OPENAI_DEFAULT_MAX_TOKENS)))
 
         return
+
+    if max_tokens.strip() == "0":
+        max_tokens = str(OPENAI_DEFAULT_MAX_TOKENS)
 
     await state.update_data(max_tokens=max_tokens)
     await state.set_state(States.default)
