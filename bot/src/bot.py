@@ -108,6 +108,7 @@ send_message_delegates: List[SendMessageDelegate] = [
     lambda bot, chat_id, text: bot.send_message(chat_id, text),
     lambda bot, chat_id, text: bot.send_message(chat_id, text, parse_mode="HTML"),
     lambda bot, chat_id, text: bot.send_message(chat_id, strip_markdown(text)),
+    lambda bot, chat_id, text: bot.send_message(chat_id, f"```\n{text}\n```"),
 ]
 
 @router.errors(ExceptionTypeFilter(PermissionError))
@@ -182,7 +183,7 @@ async def send_message_with_retry(bot: Bot, chat_id: int, text: str) -> None:
         except BaseException as send_exception:
             log.error(f"Cannot parse answer:\n{text}")
 
-            if "parse entities" not in str(send_exception):
+            if "parse" not in str(send_exception):
                 raise
 
             last_exception = send_exception
