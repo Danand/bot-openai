@@ -196,15 +196,14 @@ async def send_prompt(message: Message, state: FSMContext) -> None:
     if (prompt is None or len(prompt) == 0):
         return
 
-    data = await state.get_data()
-    saved_messages: List[Dict[str, str]] = data.get("saved_messages", [])
-
-    saved_messages.append({"role": "user", "content": prompt})
-    await state.update_data(saved_messages=saved_messages)
-
     try:
         answer = await get_answer(prompt, state)
 
+        data = await state.get_data()
+
+        saved_messages: List[Dict[str, str]] = data.get("saved_messages", [])
+
+        saved_messages.append({"role": "user", "content": prompt})
         saved_messages.append({"role": "assistant", "content": answer})
 
         max_messages = int(data.get("max_messages", OPENAI_DEFAULT_MAX_MESSAGES))
