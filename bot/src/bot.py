@@ -48,7 +48,7 @@ from filters import (
 
 from aliases import SendMessageDelegate
 from states import States
-from utils import strip_markdown
+from utils import strip_markdown, split_string_to_batches
 
 env = Env()
 env.read_env(recurse=True)
@@ -214,7 +214,11 @@ async def send_prompt(message: Message, state: FSMContext) -> None:
 
         await state.update_data(saved_messages=saved_messages)
 
-        await send_message_with_retry(bot, message.chat.id, answer)
+        if (len(answer.encode()) < 4096):
+            await send_message_with_retry(bot, message.chat.id, answer)
+        else:
+            for batch in split_string_to_batches(answer, 2048):
+                await send_message_with_retry(bot, message.chat.id, batch)
 
     except BaseException as exception:
         log.error(exception)
