@@ -17,7 +17,7 @@
         {
             "label": "venv-ensure",
             "type": "shell",
-            "command": "(cd ${workspaceFolder}/bot && test -d .venv || python3.11 -m venv .venv)",
+            "command": "(cd ${workspaceFolder}/bot && test -d .venv || python3.12 -m venv .venv)",
             "presentation": { "reveal": "always" },
             "group": "build",
         },

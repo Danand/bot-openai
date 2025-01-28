@@ -5,11 +5,11 @@
     "**/.venv": true
   },
   "python.autoComplete.extraPaths": [
-    "${workspaceFolder}/bot/.venv/lib/python3.11/site-packages",
+    "${workspaceFolder}/bot/.venv/lib/python3.12/site-packages",
     "${workspaceFolder}/bot/src",
   ],
   "python.analysis.extraPaths": [
-    "${workspaceFolder}/bot/.venv/lib/python3.11/site-packages",
+    "${workspaceFolder}/bot/.venv/lib/python3.12/site-packages",
     "${workspaceFolder}/bot/src"
   ],
   "python.analysis.autoImportCompletions": true,
@@ -18,7 +18,7 @@
   "python.analysis.indexing": true,
   "python.analysis.typeCheckingMode": "basic",
   "python.analysis.include": [
-    "${workspaceFolder}/bot/.venv/lib/python3.11/site-packages",
+    "${workspaceFolder}/bot/.venv/lib/python3.12/site-packages",
     "${workspaceFolder}/bot/src"
   ],
   "cSpell.ignoreRegExpList": [

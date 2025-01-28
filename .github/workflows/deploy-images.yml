@@ -22,6 +22,7 @@ on:
       openai-default-model:
         type: choice
         options:
+          - gpt-4o
           - gpt-3.5-turbo
           - gpt-3.5-turbo-0301
           - gpt-4
@@ -52,7 +53,7 @@ env:
   SSH_KEY_NAME: id_rsa
   REDIS_HOST: bot-openai-redis
   REDIS_PORT: 6380
-  REDIS_VERSION: 7.0.11-alpine3.18
+  REDIS_VERSION: 7.2.7-alpine3.21
   DEPLOY_PATH: /root/bot-openai
 
 jobs:

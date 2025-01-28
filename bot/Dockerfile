@@ -1,4 +1,4 @@
-FROM python:3.11.3-alpine3.18
+FROM python:3.12.8-alpine3.21
 
 WORKDIR /bot
 

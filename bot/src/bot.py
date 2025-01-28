@@ -10,7 +10,7 @@ import logging as log
 import simplejson as json
 import pkg_resources as packages
 
-from typing import List, Dict
+from typing import List, Dict, cast
 
 from redis.asyncio.client import Redis
 
@@ -69,14 +69,14 @@ OPENAI_DEFAULT_MAX_TOKENS_LIMIT: int = 4097
 
 IS_IN_DOCKER: bool = env.bool("IS_IN_DOCKER", default=False)
 TELEGRAM_API_TOKEN: str = env.str("TELEGRAM_API_TOKEN")
-TELEGRAM_WHITELISTED_USERS: List[int] = env.list("TELEGRAM_WHITELISTED_USERS", subcast=int)
+TELEGRAM_WHITELISTED_USERS: List[int] = cast(List[int], env.list("TELEGRAM_WHITELISTED_USERS", subcast=int))
 OPENAI_API_KEY: str = env.str("OPENAI_API_KEY")
-OPENAI_DEFAULT_MODEL: str = env.str("OPENAI_DEFAULT_MODEL", default="gpt-3.5-turbo")
+OPENAI_DEFAULT_MODEL: str = env.str("OPENAI_DEFAULT_MODEL", default="gpt-4o")
 OPENAI_DEFAULT_TEMPERATURE: float = env.float("OPENAI_DEFAULT_TEMPERATURE", default=1.0)
 OPENAI_DEFAULT_MAX_TOKENS: int = env.int("OPENAI_DEFAULT_MAX_TOKENS", default=OPENAI_DEFAULT_MAX_TOKENS_LIMIT)
 OPENAI_DEFAULT_MAX_MESSAGES: int = env.int("OPENAI_DEFAULT_MAX_MESSAGES", default=6)
 REDIS_HOST: str = env.str("REDIS_HOST", default="localhost") if IS_IN_DOCKER else "localhost"
-REDIS_PORT: int = env.int("REDIS_PORT", default="6379")
+REDIS_PORT: int = env.int("REDIS_PORT", default=6379)
 
 env.seal()
 
@@ -535,15 +535,21 @@ async def get_answer(prompt: str, state: FSMContext) -> str:
     max_tokens = int(data.get("max_tokens", OPENAI_DEFAULT_MAX_TOKENS))
     max_messages = int(data.get("max_messages", OPENAI_DEFAULT_MAX_MESSAGES))
 
-    messages: List[Dict[str, str]] = data.get("saved_messages", [{"role": "user", "content": prompt}])
+    messages = data.get(
+        "saved_messages",
+        [
+            {"role": "user", "content": prompt}
+        ]
+    )
 
     while True:
         try:
-            response = await openai.ChatCompletion.acreate(
+            response = openai.chat.completions.create(
                 model=model,
                 temperature=temperature,
                 max_tokens=None if max_tokens == OPENAI_DEFAULT_MAX_TOKENS_LIMIT else max_tokens,
-                messages=messages)
+                messages=messages
+            )
 
             return response.choices[0].message.content # type: ignore
 

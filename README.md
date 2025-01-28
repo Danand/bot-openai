@@ -34,14 +34,14 @@ This is a repository for a chatbot built using OpenAI's chat completion API. It 
    TELEGRAM_WHITELISTED_USERS="<telegram-user-id-integer-of-admins-comma-separated>"
 
    OPENAI_API_KEY="<your-token-here>"
-   OPENAI_DEFAULT_MODEL="gpt-3.5-turbo"
+   OPENAI_DEFAULT_MODEL="gpt-4o"
    OPENAI_DEFAULT_TEMPERATURE="1.0"
    OPENAI_DEFAULT_MAX_TOKENS="4097"
    OPENAI_DEFAULT_MAX_MESSAGES="6"
 
    REDIS_HOST="bot-openai-redis"
    REDIS_PORT=6380
-   REDIS_VERSION="7.0.11-alpine3.18"
+   REDIS_VERSION="7.2.7-alpine3.21"
    ```
 
 3. Run the bot using the command:

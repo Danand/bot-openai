@@ -1,7 +1,7 @@
-aiogram==3.0.0b7
-openai==0.27.6
-redis==4.5.5
+aiogram==3.17.0
+openai==1.60.2
+redis==5.2.1
 asyncio==3.4.3
-simplejson==3.19.1
-setuptools==67.8.0
-environs==9.5.0
+simplejson==3.19.3
+setuptools==75.8.0
+environs==14.1.0
