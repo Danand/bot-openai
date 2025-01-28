@@ -126,4 +126,3 @@ jobs:
               --force-recreate \
           "
         rm ${{ env.SSH_KEY_NAME }}
-l
