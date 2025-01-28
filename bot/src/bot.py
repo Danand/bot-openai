@@ -4,7 +4,6 @@ import asyncio
 import inspect
 import time
 
-
 import logging as log
 import simplejson as json
 import pkg_resources as packages
@@ -17,6 +16,7 @@ from redis.asyncio.client import Redis
 from environs import Env
 
 from aiogram import Bot, Dispatcher, Router
+from aiogram.client.default import DefaultBotProperties
 from aiogram.filters.command import Command, CommandStart
 from aiogram.filters.exception import ExceptionTypeFilter
 from aiogram.fsm.context import FSMContext
@@ -85,7 +85,9 @@ log.debug(f"Environment parsed:\n{env.dump()}")
 
 bot = Bot(
     token=TELEGRAM_API_TOKEN,
-    parse_mode="Markdown",
+    default=DefaultBotProperties(
+        parse_mode="Markdown",
+    ),
 )
 
 log.info("Bot initialized")
