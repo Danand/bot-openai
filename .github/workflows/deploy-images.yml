@@ -48,6 +48,10 @@ on:
         description: Default limit of context.
         required: false
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   PRODUCT_NAME: bot-openai
   SSH_KEY_NAME: id_rsa
@@ -101,7 +105,7 @@ jobs:
           "\
             docker login \
               --username ${{ github.repository_owner }} \
-              --password ${{ secrets._GITHUB_PAT }} \
+              --password ${{ secrets.GITHUB_TOKEN }} \
               ghcr.io && \
             cd ${{ env.DEPLOY_PATH }} && \
             echo "LOG_LEVEL=\"${{ inputs.log-level }}\"" > .env && \

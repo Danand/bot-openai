@@ -63,7 +63,6 @@ This is a repository for a chatbot built using OpenAI's chat completion API. It 
    - `OPENAI_API_KEY`
    - `TELEGRAM_API_TOKEN`
    - `TELEGRAM_WHITELISTED_USERS`
-   - `_GITHUB_PAT`
 
 3. Make changes if you want to.
 4. Make sure you have compatible [GitHub Actions Runner](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners) for this repo.
