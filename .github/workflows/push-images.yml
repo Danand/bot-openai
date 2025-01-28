@@ -13,6 +13,10 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   PRODUCT_NAME: bot-openai
 
