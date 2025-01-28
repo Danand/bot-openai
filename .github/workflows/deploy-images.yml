@@ -65,6 +65,8 @@ jobs:
     if: inputs.image-version || github.ref_type == 'tag'
     runs-on: ubuntu-24.04
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4.2.2
     - name: Get Docker image tag for ghcr.io
       id: docker-image-tag
       uses: Danand/docker-image-tag@v2-rc.8

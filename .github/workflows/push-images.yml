@@ -32,7 +32,7 @@ jobs:
         --password ${{ secrets.GITHUB_TOKEN }} \
         ghcr.io
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4.2.2
     - name: Get Docker image tag for ghcr.io
       id: docker-image-tag
       uses: Danand/docker-image-tag@v2-rc.8
