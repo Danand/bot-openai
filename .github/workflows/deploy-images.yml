@@ -59,7 +59,7 @@ env:
 jobs:
   deploy-bot:
     if: inputs.image-version || github.ref_type == 'tag'
-    runs-on: [self-hosted, docker]
+    runs-on: ubuntu-24.04
     steps:
     - name: Get Docker image tag for ghcr.io
       id: docker-image-tag

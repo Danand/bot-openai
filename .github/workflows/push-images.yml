@@ -18,7 +18,7 @@ env:
 
 jobs:
   push-bot:
-    runs-on: [self-hosted, docker]
+    runs-on: ubuntu-24.04
     steps:
     - name: Login ghcr.io
       shell: bash
