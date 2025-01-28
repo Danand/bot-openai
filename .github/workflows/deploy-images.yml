@@ -29,7 +29,7 @@ on:
           - gpt-4-0314
           - gpt-4-32k
           - gpt-4-32k-0314
-        default: gpt-3.5-turbo
+        default: gpt-4o
         description: Default chat completion model on new user session.
         required: false
       openai-default-temperature:
